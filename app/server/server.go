@@ -8,16 +8,21 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/handler"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
+	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
 
-// Server holds the TCP listener configuration.
+// Server holds the TCP listener configuration and shared state.
 type Server struct {
-	addr string
+	addr  string
+	store *store.Store
 }
 
 // New creates a new Server instance.
 func New(addr string) *Server {
-	return &Server{addr: addr}
+	return &Server{
+		addr:  addr,
+		store: store.New(),
+	}
 }
 
 // Start begins listening for incoming TCP connections.
@@ -49,6 +54,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			return
 		}
-		handler.Handle(cmd, conn)
+		handler.Handle(cmd, conn, s.store)
 	}
 }

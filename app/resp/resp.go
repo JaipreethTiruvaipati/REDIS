@@ -82,3 +82,8 @@ func BulkString(s string) string {
 func Error(s string) string {
 	return fmt.Sprintf("-ERR %s\r\n", s)
 }
+
+// NullBulkString returns a RESP null bulk string, used when a key doesn't exist.
+func NullBulkString() string {
+	return "$-1\r\n"
+}
