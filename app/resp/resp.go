@@ -92,3 +92,13 @@ func NullBulkString() string {
 func Integer(n int) string {
 	return fmt.Sprintf(":%d\r\n", n)
 }
+
+// Array encodes a slice of strings as a RESP array of bulk strings.
+// Returns *0\r\n for an empty slice.
+func Array(items []string) string {
+	result := fmt.Sprintf("*%d\r\n", len(items))
+	for _, item := range items {
+		result += BulkString(item)
+	}
+	return result
+}

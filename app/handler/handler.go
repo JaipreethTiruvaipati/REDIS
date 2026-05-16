@@ -74,6 +74,24 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		values := cmd.Args[1:]
 		newLen := s.RPush(key, values...)
 		conn.Write([]byte(resp.Integer(newLen)))
+	case "LRANGE":
+		if len(cmd.Args) < 3 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'lrange' command")))
+			return
+		}
+		key := cmd.Args[0]
+		start, err := strconv.Atoi(cmd.Args[1])
+		if err != nil {
+			conn.Write([]byte(resp.Error("value is not an integer or out of range")))
+			return
+		}
+		stop, err := strconv.Atoi(cmd.Args[2])
+		if err != nil {
+			conn.Write([]byte(resp.Error("value is not an integer or out of range")))
+			return
+		}
+		items := s.LRange(key, start, stop)
+		conn.Write([]byte(resp.Array(items)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

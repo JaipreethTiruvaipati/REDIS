@@ -67,3 +67,34 @@ func (s *Store) RPush(key string, values ...string) int {
 	s.lists[key] = append(s.lists[key], values...)
 	return len(s.lists[key])
 }
+
+// LRange returns elements from a list between start and stop (inclusive).
+// Returns an empty slice if the list doesn't exist or indices are out of range.
+func (s *Store) LRange(key string, start, stop int) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	list, ok := s.lists[key]
+	if !ok {
+		return []string{}
+	}
+
+	length := len(list)
+
+	// If start is beyond the list, return empty
+	if start >= length {
+		return []string{}
+	}
+
+	// Clamp stop to last valid index
+	if stop >= length {
+		stop = length - 1
+	}
+
+	// If start > stop after clamping, return empty
+	if start > stop {
+		return []string{}
+	}
+
+	return list[start : stop+1] // stop is inclusive
+}
