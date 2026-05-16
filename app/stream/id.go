@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Parse parses an explicit entry ID string like "1526919030474-0" into an EntryID.
@@ -57,4 +58,17 @@ func GenerateSeq(ms int64, lastID EntryID) EntryID {
 		seq = 0
 	}
 	return EntryID{Milliseconds: ms, Seq: seq}
+}
+
+// IsAutoFull returns true if the ID is "*" — fully auto-generated.
+func IsAutoFull(idStr string) bool {
+	return idStr == "*"
+}
+
+// GenerateFull generates a fully auto-generated EntryID.
+// Uses the current Unix time in milliseconds as the time part.
+// Sequence is 0 unless the current ms matches the last entry's ms.
+func GenerateFull(lastID EntryID) EntryID {
+	ms := time.Now().UnixMilli()
+	return GenerateSeq(ms, lastID) // reuse existing seq logic
 }

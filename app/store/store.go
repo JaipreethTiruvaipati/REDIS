@@ -266,7 +266,10 @@ func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
 	st := s.streams[key]
 	var id stream.EntryID
 
-	if stream.IsAutoSeq(idStr) {
+	if stream.IsAutoFull(idStr) {
+		// Fully auto-generated: "*"
+		id = stream.GenerateFull(st.LastID)
+	} else if stream.IsAutoSeq(idStr) {
 		// Auto-generate sequence number: "ms-*"
 		ms, err := stream.ParseAutoSeqMs(idStr)
 		if err != nil {
