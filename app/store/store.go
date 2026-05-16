@@ -129,3 +129,10 @@ func (s *Store) LPush(key string, values ...string) int {
 	s.lists[key] = append(values, s.lists[key]...)
 	return len(s.lists[key])
 }
+
+// LLen returns the length of a list. Returns 0 if the list doesn't exist.
+func (s *Store) LLen(key string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.lists[key])
+}
