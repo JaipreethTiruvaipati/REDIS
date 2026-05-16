@@ -153,6 +153,12 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		conn.Write([]byte(resp.Array([]string{key, val})))
+	case "TYPE":
+		if len(cmd.Args) < 1 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'type' command")))
+			return
+		}
+		conn.Write([]byte(resp.SimpleString(s.Type(cmd.Args[0]))))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

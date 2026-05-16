@@ -225,3 +225,21 @@ func (s *Store) BLPop(key string, timeout time.Duration) (string, bool) {
 		return "", false
 	}
 }
+
+// Type returns the Redis type of the value stored at key.
+// Returns "string", "list", or "none" if the key doesn't exist.
+func (s *Store) Type(key string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if e, ok := s.data[key]; ok {
+		// Check expiry for string keys
+		if !e.hasExpiry || time.Now().Before(e.expiresAt) {
+			return "string"
+		}
+	}
+	if _, ok := s.lists[key]; ok {
+		return "list"
+	}
+	return "none"
+}
