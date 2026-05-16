@@ -80,8 +80,9 @@ func (s *Store) RPush(key string, values ...string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lists[key] = append(s.lists[key], values...)
+	total := len(s.lists[key]) // capture BEFORE waiters consume elements
 	s.notifyWaiters(key)
-	return len(s.lists[key])
+	return total
 }
 
 // LPush prepends values to the start of a list and returns the new list length.
@@ -95,8 +96,10 @@ func (s *Store) LPush(key string, values ...string) int {
 		values[i], values[j] = values[j], values[i]
 	}
 	s.lists[key] = append(values, s.lists[key]...)
+	total := len(s.lists[key]) // capture BEFORE waiters consume elements
 	s.notifyWaiters(key)
-	return len(s.lists[key])
+	return total
+
 }
 
 // LRange returns elements from a list between start and stop (inclusive).
