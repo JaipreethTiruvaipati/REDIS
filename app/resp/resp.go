@@ -87,3 +87,8 @@ func Error(s string) string {
 func NullBulkString() string {
 	return "$-1\r\n"
 }
+
+// Integer encodes n as a RESP integer e.g. :1\r\n
+func Integer(n int) string {
+	return fmt.Sprintf(":%d\r\n", n)
+}

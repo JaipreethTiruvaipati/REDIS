@@ -30,8 +30,6 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		key, value := cmd.Args[0], cmd.Args[1]
-
-		// Parse optional PX / EX expiry arguments
 		if len(cmd.Args) >= 4 {
 			option := strings.ToUpper(cmd.Args[2])
 			ttlVal, err := strconv.ParseInt(cmd.Args[3], 10, 64)
@@ -66,6 +64,16 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		conn.Write([]byte(resp.BulkString(val)))
+
+	case "RPUSH":
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'rpush' command")))
+			return
+		}
+		key := cmd.Args[0]
+		values := cmd.Args[1:]
+		newLen := s.RPush(key, values...)
+		conn.Write([]byte(resp.Integer(newLen)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
