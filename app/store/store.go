@@ -269,17 +269,14 @@ func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
 
 	st := s.streams[key]
 
-	// ID must be greater than the last entry's ID
-	if !st.LastID.IsZero() && !st.LastID.LessThan(id) {
-		return "", fmt.Errorf("The ID specified in XADD is equal or smaller than the target stream top item")
-
+	// ID 0-0 is always invalid — check this first with its specific message
+	if id.IsZero() {
+		return "", fmt.Errorf("The ID specified in XADD must be greater than 0-0")
 	}
 
-	// ID must be greater than 0-0
-	// ID must be greater than 0-0
-	if id.IsZero() {
-		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
-
+	// ID must be strictly greater than the last entry's ID
+	if !st.LastID.IsZero() && !st.LastID.LessThan(id) {
+		return "", fmt.Errorf("The ID specified in XADD is equal or smaller than the target stream top item")
 	}
 
 	st.Add(id, fields)
