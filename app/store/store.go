@@ -275,8 +275,9 @@ func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
 	}
 
 	// ID must be greater than 0-0
+	// ID must be greater than 0-0
 	if id.IsZero() {
-		return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+		return "", fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
 	}
 
 	st.Add(id, fields)
