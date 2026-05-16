@@ -102,3 +102,8 @@ func Array(items []string) string {
 	}
 	return result
 }
+
+// NullArray returns a RESP null array, used when BLPOP times out.
+func NullArray() string {
+	return "*-1\r\n"
+}

@@ -133,6 +133,26 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		conn.Write([]byte(resp.BulkString(val)))
+	case "BLPOP":
+		// Format: BLPOP key [key ...] timeout
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'blpop' command")))
+			return
+		}
+		key := cmd.Args[0]
+		timeoutStr := cmd.Args[len(cmd.Args)-1]
+		timeoutSecs, err := strconv.ParseFloat(timeoutStr, 64)
+		if err != nil || timeoutSecs < 0 {
+			conn.Write([]byte(resp.Error("timeout is not a float or out of range")))
+			return
+		}
+		timeout := time.Duration(timeoutSecs * float64(time.Second))
+		val, ok := s.BLPop(key, timeout)
+		if !ok {
+			conn.Write([]byte(resp.NullArray()))
+			return
+		}
+		conn.Write([]byte(resp.Array([]string{key, val})))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

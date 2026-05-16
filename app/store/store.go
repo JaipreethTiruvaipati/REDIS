@@ -14,16 +14,18 @@ type entry struct {
 
 // Store is a thread-safe in-memory key-value store supporting strings and lists.
 type Store struct {
-	mu    sync.RWMutex
-	data  map[string]entry    // string keys
-	lists map[string][]string // list keys
+	mu      sync.RWMutex
+	data    map[string]entry
+	lists   map[string][]string
+	waiters map[string][]chan string // blocked BLPOP clients, per key (FIFO order)
 }
 
 // New creates a new Store instance.
 func New() *Store {
 	return &Store{
-		data:  make(map[string]entry),
-		lists: make(map[string][]string),
+		data:    make(map[string]entry),
+		lists:   make(map[string][]string),
+		waiters: make(map[string][]chan string),
 	}
 }
 
@@ -59,12 +61,41 @@ func (s *Store) Get(key string) (string, bool) {
 	return e.value, true
 }
 
+// notifyWaiters checks if any BLPOP clients are waiting on this key and serves them.
+// Must be called with s.mu held (write lock).
+func (s *Store) notifyWaiters(key string) {
+	for len(s.lists[key]) > 0 && len(s.waiters[key]) > 0 {
+		val := s.lists[key][0]
+		s.lists[key] = s.lists[key][1:]
+		ch := s.waiters[key][0]
+		s.waiters[key] = s.waiters[key][1:]
+		ch <- val // buffered channel (cap 1), won't block
+	}
+}
+
 // RPush appends values to the end of a list and returns the new list length.
 // If the list doesn't exist, it is created first.
+// Notifies any blocked BLPOP clients.
 func (s *Store) RPush(key string, values ...string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lists[key] = append(s.lists[key], values...)
+	s.notifyWaiters(key)
+	return len(s.lists[key])
+}
+
+// LPush prepends values to the start of a list and returns the new list length.
+// Values are inserted in reverse order, so the last argument ends up at the front.
+// If the list doesn't exist, it is created first.
+// Notifies any blocked BLPOP clients.
+func (s *Store) LPush(key string, values ...string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
+	}
+	s.lists[key] = append(values, s.lists[key]...)
+	s.notifyWaiters(key)
 	return len(s.lists[key])
 }
 
@@ -82,52 +113,26 @@ func (s *Store) LRange(key string, start, stop int) []string {
 
 	length := len(list)
 
-	// Convert negative indexes to positive
 	if start < 0 {
 		start = length + start
 	}
 	if stop < 0 {
 		stop = length + stop
 	}
-
-	// Clamp start to 0 if still negative (was out of range)
 	if start < 0 {
 		start = 0
 	}
-
-	// If start is beyond the list, return empty
 	if start >= length {
 		return []string{}
 	}
-
-	// Clamp stop to last valid index
 	if stop >= length {
 		stop = length - 1
 	}
-
-	// If start > stop, return empty
 	if start > stop {
 		return []string{}
 	}
 
 	return list[start : stop+1]
-}
-
-// LPush prepends values to the start of a list and returns the new list length.
-// Values are inserted in reverse order, so the last argument ends up at the front.
-// If the list doesn't exist, it is created first.
-func (s *Store) LPush(key string, values ...string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Reverse values so the last argument ends up at the front
-	// e.g., LPUSH list a b c → [c, b, a]
-	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
-		values[i], values[j] = values[j], values[i]
-	}
-
-	s.lists[key] = append(values, s.lists[key]...)
-	return len(s.lists[key])
 }
 
 // LLen returns the length of a list. Returns 0 if the list doesn't exist.
@@ -142,14 +147,12 @@ func (s *Store) LLen(key string) int {
 func (s *Store) LPop(key string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	list, ok := s.lists[key]
 	if !ok || len(list) == 0 {
 		return "", false
 	}
-
-	val := list[0]          // grab the first element
-	s.lists[key] = list[1:] // shrink the list by removing index 0
+	val := list[0]
+	s.lists[key] = list[1:]
 	return val, true
 }
 
@@ -159,18 +162,63 @@ func (s *Store) LPop(key string) (string, bool) {
 func (s *Store) LPopN(key string, count int) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	list, ok := s.lists[key]
 	if !ok || len(list) == 0 {
 		return []string{}
 	}
-
-	// Clamp count to list length
 	if count > len(list) {
 		count = len(list)
 	}
-
-	popped := list[:count]      // first `count` elements
-	s.lists[key] = list[count:] // remaining elements
+	popped := list[:count]
+	s.lists[key] = list[count:]
 	return popped
+}
+
+// BLPop blocks until an element is available in the list or the timeout expires.
+// timeout=0 means block indefinitely.
+// Returns ("", false) on timeout.
+func (s *Store) BLPop(key string, timeout time.Duration) (string, bool) {
+	s.mu.Lock()
+
+	// Try immediate pop — no need to block if element already exists
+	list := s.lists[key]
+	if len(list) > 0 {
+		val := list[0]
+		s.lists[key] = list[1:]
+		s.mu.Unlock()
+		return val, true
+	}
+
+	// Register as a waiter (buffered so RPush won't block when sending)
+	ch := make(chan string, 1)
+	s.waiters[key] = append(s.waiters[key], ch)
+	s.mu.Unlock()
+
+	// Block indefinitely
+	if timeout == 0 {
+		val := <-ch
+		return val, true
+	}
+
+	// Block with timeout
+	select {
+	case val := <-ch:
+		return val, true
+	case <-time.After(timeout):
+		// Remove our channel from waiters (RPush may have already removed it)
+		s.mu.Lock()
+		for i, w := range s.waiters[key] {
+			if w == ch {
+				s.waiters[key] = append(s.waiters[key][:i], s.waiters[key][i+1:]...)
+				break
+			}
+		}
+		s.mu.Unlock()
+		// Drain any value sent after timeout fired (race condition safety)
+		select {
+		case <-ch:
+		default:
+		}
+		return "", false
+	}
 }
