@@ -152,3 +152,25 @@ func (s *Store) LPop(key string) (string, bool) {
 	s.lists[key] = list[1:] // shrink the list by removing index 0
 	return val, true
 }
+
+// LPopN removes and returns the first n elements of a list.
+// If n exceeds the list length, all elements are removed and returned.
+// Returns an empty slice if the list doesn't exist or is empty.
+func (s *Store) LPopN(key string, count int) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	list, ok := s.lists[key]
+	if !ok || len(list) == 0 {
+		return []string{}
+	}
+
+	// Clamp count to list length
+	if count > len(list) {
+		count = len(list)
+	}
+
+	popped := list[:count]      // first `count` elements
+	s.lists[key] = list[count:] // remaining elements
+	return popped
+}

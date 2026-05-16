@@ -112,7 +112,22 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			conn.Write([]byte(resp.Error("wrong number of arguments for 'lpop' command")))
 			return
 		}
-		val, ok := s.LPop(cmd.Args[0])
+		key := cmd.Args[0]
+
+		// LPOP key count → returns RESP array
+		if len(cmd.Args) >= 2 {
+			count, err := strconv.Atoi(cmd.Args[1])
+			if err != nil || count < 0 {
+				conn.Write([]byte(resp.Error("value is not an integer or out of range")))
+				return
+			}
+			items := s.LPopN(key, count)
+			conn.Write([]byte(resp.Array(items)))
+			return
+		}
+
+		// LPOP key → returns single bulk string (original behavior)
+		val, ok := s.LPop(key)
 		if !ok {
 			conn.Write([]byte(resp.NullBulkString()))
 			return
