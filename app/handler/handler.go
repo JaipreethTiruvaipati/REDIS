@@ -92,6 +92,15 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		}
 		items := s.LRange(key, start, stop)
 		conn.Write([]byte(resp.Array(items)))
+	case "LPUSH":
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'lpush' command")))
+			return
+		}
+		key := cmd.Args[0]
+		values := cmd.Args[1:]
+		newLen := s.LPush(key, values...)
+		conn.Write([]byte(resp.Integer(newLen)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

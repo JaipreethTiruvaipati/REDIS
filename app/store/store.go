@@ -112,3 +112,20 @@ func (s *Store) LRange(key string, start, stop int) []string {
 
 	return list[start : stop+1]
 }
+
+// LPush prepends values to the start of a list and returns the new list length.
+// Values are inserted in reverse order, so the last argument ends up at the front.
+// If the list doesn't exist, it is created first.
+func (s *Store) LPush(key string, values ...string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Reverse values so the last argument ends up at the front
+	// e.g., LPUSH list a b c → [c, b, a]
+	for i, j := 0, len(values)-1; i < j; i, j = i+1, j-1 {
+		values[i], values[j] = values[j], values[i]
+	}
+
+	s.lists[key] = append(values, s.lists[key]...)
+	return len(s.lists[key])
+}
