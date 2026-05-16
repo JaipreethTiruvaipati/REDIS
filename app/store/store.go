@@ -69,6 +69,7 @@ func (s *Store) RPush(key string, values ...string) int {
 }
 
 // LRange returns elements from a list between start and stop (inclusive).
+// Supports negative indexes: -1 is the last element, -2 second-to-last, etc.
 // Returns an empty slice if the list doesn't exist or indices are out of range.
 func (s *Store) LRange(key string, start, stop int) []string {
 	s.mu.RLock()
@@ -81,6 +82,19 @@ func (s *Store) LRange(key string, start, stop int) []string {
 
 	length := len(list)
 
+	// Convert negative indexes to positive
+	if start < 0 {
+		start = length + start
+	}
+	if stop < 0 {
+		stop = length + stop
+	}
+
+	// Clamp start to 0 if still negative (was out of range)
+	if start < 0 {
+		start = 0
+	}
+
 	// If start is beyond the list, return empty
 	if start >= length {
 		return []string{}
@@ -91,10 +105,10 @@ func (s *Store) LRange(key string, start, stop int) []string {
 		stop = length - 1
 	}
 
-	// If start > stop after clamping, return empty
+	// If start > stop, return empty
 	if start > stop {
 		return []string{}
 	}
 
-	return list[start : stop+1] // stop is inclusive
+	return list[start : stop+1]
 }
