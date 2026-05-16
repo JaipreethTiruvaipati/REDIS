@@ -159,6 +159,22 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		conn.Write([]byte(resp.SimpleString(s.Type(cmd.Args[0]))))
+	case "XADD":
+		// Format: XADD key id field1 value1 [field2 value2 ...]
+		if len(cmd.Args) < 4 || (len(cmd.Args)-2)%2 != 0 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'xadd' command")))
+			return
+		}
+		key := cmd.Args[0]
+		idStr := cmd.Args[1]
+		fields := cmd.Args[2:] // [field1, value1, field2, value2, ...]
+
+		entryID, err := s.XAdd(key, idStr, fields)
+		if err != nil {
+			conn.Write([]byte(resp.Error(err.Error())))
+			return
+		}
+		conn.Write([]byte(resp.BulkString(entryID)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

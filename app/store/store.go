@@ -1,8 +1,11 @@
 package store
 
 import (
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/app/stream"
 )
 
 // entry holds a string value and an optional expiry time.
@@ -18,6 +21,7 @@ type Store struct {
 	data    map[string]entry
 	lists   map[string][]string
 	waiters map[string][]chan string // blocked BLPOP clients, per key (FIFO order)
+	streams map[string]*stream.Stream
 }
 
 // New creates a new Store instance.
@@ -26,6 +30,7 @@ func New() *Store {
 		data:    make(map[string]entry),
 		lists:   make(map[string][]string),
 		waiters: make(map[string][]chan string),
+		streams: make(map[string]*stream.Stream),
 	}
 }
 
@@ -241,5 +246,39 @@ func (s *Store) Type(key string) string {
 	if _, ok := s.lists[key]; ok {
 		return "list"
 	}
+	if _, ok := s.streams[key]; ok {
+		return "stream"
+	}
 	return "none"
+}
+
+// XAdd appends an entry to a stream. Creates the stream if it doesn't exist.
+// Returns the entry ID as a string, or an error if the ID is invalid.
+func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
+	id, err := stream.Parse(idStr)
+	if err != nil {
+		return "", err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.streams[key]; !exists {
+		s.streams[key] = stream.New()
+	}
+
+	st := s.streams[key]
+
+	// ID must be greater than the last entry's ID
+	if !st.LastID.IsZero() && !st.LastID.LessThan(id) {
+		return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+	}
+
+	// ID must be greater than 0-0
+	if id.IsZero() {
+		return "", fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+	}
+
+	st.Add(id, fields)
+	return id.String(), nil
 }
