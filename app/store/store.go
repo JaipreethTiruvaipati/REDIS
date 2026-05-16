@@ -253,13 +253,9 @@ func (s *Store) Type(key string) string {
 }
 
 // XAdd appends an entry to a stream. Creates the stream if it doesn't exist.
+// Supports explicit IDs and auto-sequence IDs ("ms-*").
 // Returns the entry ID as a string, or an error if the ID is invalid.
 func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
-	id, err := stream.Parse(idStr)
-	if err != nil {
-		return "", err
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -268,15 +264,37 @@ func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
 	}
 
 	st := s.streams[key]
+	var id stream.EntryID
 
-	// ID 0-0 is always invalid — check this first with its specific message
-	if id.IsZero() {
-		return "", fmt.Errorf("The ID specified in XADD must be greater than 0-0")
-	}
+	if stream.IsAutoSeq(idStr) {
+		// Auto-generate sequence number: "ms-*"
+		ms, err := stream.ParseAutoSeqMs(idStr)
+		if err != nil {
+			return "", err
+		}
+		id = stream.GenerateSeq(ms, st.LastID)
 
-	// ID must be strictly greater than the last entry's ID
-	if !st.LastID.IsZero() && !st.LastID.LessThan(id) {
-		return "", fmt.Errorf("The ID specified in XADD is equal or smaller than the target stream top item")
+		// Validate: generated ID must still be > lastID (e.g. ms < lastID.ms fails)
+		if !st.LastID.IsZero() && !st.LastID.LessThan(id) {
+			return "", fmt.Errorf("The ID specified in XADD is equal or smaller than the target stream top item")
+		}
+	} else {
+		// Explicit ID: parse and validate
+		var err error
+		id, err = stream.Parse(idStr)
+		if err != nil {
+			return "", err
+		}
+
+		// 0-0 is always invalid with its specific message
+		if id.IsZero() {
+			return "", fmt.Errorf("The ID specified in XADD must be greater than 0-0")
+		}
+
+		// Must be strictly greater than last entry
+		if !st.LastID.IsZero() && !st.LastID.LessThan(id) {
+			return "", fmt.Errorf("The ID specified in XADD is equal or smaller than the target stream top item")
+		}
 	}
 
 	st.Add(id, fields)
