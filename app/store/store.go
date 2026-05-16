@@ -136,3 +136,19 @@ func (s *Store) LLen(key string) int {
 	defer s.mu.RUnlock()
 	return len(s.lists[key])
 }
+
+// LPop removes and returns the first element of a list.
+// Returns ("", false) if the list doesn't exist or is empty.
+func (s *Store) LPop(key string) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	list, ok := s.lists[key]
+	if !ok || len(list) == 0 {
+		return "", false
+	}
+
+	val := list[0]          // grab the first element
+	s.lists[key] = list[1:] // shrink the list by removing index 0
+	return val, true
+}

@@ -107,6 +107,17 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		conn.Write([]byte(resp.Integer(s.LLen(cmd.Args[0]))))
+	case "LPOP":
+		if len(cmd.Args) < 1 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'lpop' command")))
+			return
+		}
+		val, ok := s.LPop(cmd.Args[0])
+		if !ok {
+			conn.Write([]byte(resp.NullBulkString()))
+			return
+		}
+		conn.Write([]byte(resp.BulkString(val)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
