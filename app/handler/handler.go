@@ -14,9 +14,16 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
 
-// Handle dispatches a parsed command and writes the RESP response to conn.
-func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
-	switch cmd.Name {
+// Handle processes a single parsed command and writes the response to the connection.
+func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth.User) {
+	cmdName := strings.ToUpper(cmd.Name)
+
+	if *currentUser == nil && cmdName != "AUTH" {
+		conn.Write([]byte(resp.Error("NOAUTH Authentication required.")))
+		return
+	}
+
+	switch cmdName {
 	case "PING":
 		conn.Write([]byte(resp.SimpleString("PONG")))
 
@@ -282,7 +289,7 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		}
 		switch strings.ToUpper(cmd.Args[0]) {
 		case "WHOAMI":
-			conn.Write([]byte(resp.BulkString(auth.DefaultUser().Username)))
+			conn.Write([]byte(resp.BulkString((*currentUser).Username)))
 
 		case "GETUSER":
 			if len(cmd.Args) < 2 {
@@ -334,6 +341,7 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			conn.Write([]byte("-WRONGPASS invalid username-password pair or user is disabled\r\n"))
 			return
 		}
+		*currentUser = user
 		conn.Write([]byte(resp.SimpleString("OK")))
 
 	default:

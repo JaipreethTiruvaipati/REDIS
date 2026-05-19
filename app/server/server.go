@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/codecrafters-io/redis-starter-go/app/auth"
 	"github.com/codecrafters-io/redis-starter-go/app/handler"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
@@ -46,6 +47,13 @@ func (s *Server) Start() error {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
+
+	var currentUser *auth.User
+	defaultUser, _ := auth.GetUser("default")
+	if defaultUser.NoPass {
+		currentUser = defaultUser
+	}
+
 	for {
 		cmd, err := resp.Parse(reader)
 		if err != nil {
@@ -54,6 +62,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			return
 		}
-		handler.Handle(cmd, conn, s.store)
+		handler.Handle(cmd, conn, s.store, &currentUser)
 	}
 }
