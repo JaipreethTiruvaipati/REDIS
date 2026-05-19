@@ -56,3 +56,19 @@ func (u *User) SetPassword(password string) {
 	}
 	u.Flags = filtered
 }
+
+// Authenticate checks if the given password matches any stored password hash.
+// If the user has nopass set, any password is accepted.
+func (u *User) Authenticate(password string) bool {
+	if u.NoPass {
+		return true
+	}
+	hash := sha256.Sum256([]byte(password))
+	hashStr := fmt.Sprintf("%x", hash)
+	for _, stored := range u.Passwords {
+		if stored == hashStr {
+			return true
+		}
+	}
+	return false
+}

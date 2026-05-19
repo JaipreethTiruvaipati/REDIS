@@ -321,6 +321,21 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			conn.Write([]byte(resp.Error(fmt.Sprintf("unknown subcommand '%s' for 'acl' command", cmd.Args[0]))))
 		}
 
+	case "AUTH":
+		// Format: AUTH <username> <password>
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'auth' command")))
+			return
+		}
+		username := cmd.Args[0]
+		password := cmd.Args[1]
+		user, ok := auth.GetUser(username)
+		if !ok || !user.Authenticate(password) {
+			conn.Write([]byte(resp.Error("WRONGPASS invalid username-password pair or user is disabled")))
+			return
+		}
+		conn.Write([]byte(resp.SimpleString("OK")))
+
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
