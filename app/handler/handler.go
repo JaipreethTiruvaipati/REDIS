@@ -331,7 +331,7 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		password := cmd.Args[1]
 		user, ok := auth.GetUser(username)
 		if !ok || !user.Authenticate(password) {
-			conn.Write([]byte(resp.Error("WRONGPASS invalid username-password pair or user is disabled")))
+			conn.Write([]byte("-WRONGPASS invalid username-password pair or user is disabled\r\n"))
 			return
 		}
 		conn.Write([]byte(resp.SimpleString("OK")))
