@@ -94,16 +94,35 @@ func (z *ZSet) Rank(member string) int {
 }
 
 // Range returns a slice of members within the specified rank range (inclusive).
-// If start is out of bounds or start > stop, it returns an empty slice.
+// Handles both positive and negative indexes.
 func (z *ZSet) Range(start, stop int) []string {
-	if start < 0 {
-		start = 0
-	}
-	if start >= len(z.nodes) {
+	length := len(z.nodes)
+	if length == 0 {
 		return []string{}
 	}
-	if stop >= len(z.nodes) {
-		stop = len(z.nodes) - 1
+
+	// Convert negative start index
+	if start < 0 {
+		start = length + start
+		if start < 0 {
+			start = 0 // if absolute value > length, treat as 0
+		}
+	}
+
+	// Convert negative stop index
+	if stop < 0 {
+		stop = length + stop
+		if stop < 0 {
+			stop = 0 // if absolute value > length, treat as 0
+		}
+	}
+
+	// Standard bounds checking
+	if start >= length {
+		return []string{}
+	}
+	if stop >= length {
+		stop = length - 1
 	}
 	if start > stop {
 		return []string{}
