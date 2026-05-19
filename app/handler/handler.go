@@ -285,45 +285,29 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			conn.Write([]byte(resp.BulkString(auth.DefaultUser().Username)))
 
 		case "GETUSER":
+			// ... existing GETUSER code ...
+
+		case "SETUSER": // ← move it HERE, inside the inner switch
 			if len(cmd.Args) < 2 {
-				conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|getuser' command")))
+				conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|setuser' command")))
 				return
 			}
-			user, ok := auth.GetUser(cmd.Args[1])
+			username := cmd.Args[1]
+			user, ok := auth.GetUser(username)
 			if !ok {
-				conn.Write([]byte(resp.NullBulkString()))
+				conn.Write([]byte(resp.Error(fmt.Sprintf("ERR User '%s' not found", username))))
 				return
 			}
-			// Response: *2\r\n "flags" [flag1, flag2, ...]
-			response := "*4\r\n" +
-				resp.BulkString("flags") + resp.Array(user.Flags) +
-				resp.BulkString("passwords") + resp.Array(user.Passwords)
-			conn.Write([]byte(response))
+			for _, rule := range cmd.Args[2:] {
+				if strings.HasPrefix(rule, ">") {
+					user.SetPassword(rule[1:])
+				}
+			}
+			conn.Write([]byte(resp.SimpleString("OK")))
 
 		default:
 			conn.Write([]byte(resp.Error(fmt.Sprintf("unknown subcommand '%s' for 'acl' command", cmd.Args[0]))))
 		}
-	case "SETUSER":
-		// Format: ACL SETUSER <username> [rules...]
-		// Supported rule: >password (add password)
-		if len(cmd.Args) < 2 {
-			conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|setuser' command")))
-			return
-		}
-		username := cmd.Args[1]
-		user, ok := auth.GetUser(username)
-		if !ok {
-			conn.Write([]byte(resp.Error(fmt.Sprintf("ERR User '%s' not found", username))))
-			return
-		}
-		// Process each rule (e.g. ">mypassword")
-		for _, rule := range cmd.Args[2:] {
-			if strings.HasPrefix(rule, ">") {
-				user.SetPassword(rule[1:]) // strip ">" to get raw password
-			}
-			// More rule types handled in later stages
-		}
-		conn.Write([]byte(resp.SimpleString("OK")))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
