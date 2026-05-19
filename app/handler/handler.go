@@ -197,13 +197,33 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		entries := s.XRange(key, start, end)
 		conn.Write([]byte(resp.StreamEntries(entries)))
 	case "XREAD":
-		// Format: XREAD STREAMS key1 [key2 ...] id1 [id2 ...]
-		if len(cmd.Args) < 3 || strings.ToUpper(cmd.Args[0]) != "STREAMS" {
+		args := cmd.Args
+		isBlocking := false
+		var blockTimeout time.Duration
+
+		// Parse optional BLOCK <milliseconds> at the beginning
+		if len(args) > 0 && strings.ToUpper(args[0]) == "BLOCK" {
+			if len(args) < 2 {
+				conn.Write([]byte(resp.Error("syntax error")))
+				return
+			}
+			blockMs, err := strconv.ParseInt(args[1], 10, 64)
+			if err != nil || blockMs < 0 {
+				conn.Write([]byte(resp.Error("timeout is not an integer or out of range")))
+				return
+			}
+			blockTimeout = time.Duration(blockMs) * time.Millisecond
+			isBlocking = true
+			args = args[2:] // skip past "BLOCK <ms>"
+		}
+
+		// Now expect: STREAMS key1 [key2 ...] id1 [id2 ...]
+		if len(args) < 3 || strings.ToUpper(args[0]) != "STREAMS" {
 			conn.Write([]byte(resp.Error("syntax error")))
 			return
 		}
 
-		remaining := cmd.Args[1:] // everything after "STREAMS"
+		remaining := args[1:] // everything after "STREAMS"
 		if len(remaining)%2 != 0 {
 			conn.Write([]byte(resp.Error("unbalanced STREAMS list")))
 			return
@@ -213,22 +233,39 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		keys := remaining[:half]
 		idStrs := remaining[half:]
 
-		afterIDs := make([]stream.EntryID, len(idStrs))
-		for i, idStr := range idStrs {
-			id, err := stream.Parse(idStr)
+		if !isBlocking {
+			// Non-blocking: return immediately
+			afterIDs := make([]stream.EntryID, len(idStrs))
+			for i, idStr := range idStrs {
+				id, err := stream.Parse(idStr)
+				if err != nil {
+					conn.Write([]byte(resp.Error(err.Error())))
+					return
+				}
+				afterIDs[i] = id
+			}
+			results := s.XRead(keys, afterIDs)
+			if len(results) == 0 {
+				conn.Write([]byte(resp.NullArray()))
+				return
+			}
+			conn.Write([]byte(resp.StreamReadResults(results)))
+		} else {
+			// Blocking: use BXRead for the first key
+			key := keys[0]
+			afterID, err := stream.Parse(idStrs[0])
 			if err != nil {
 				conn.Write([]byte(resp.Error(err.Error())))
 				return
 			}
-			afterIDs[i] = id
+			entries, ok := s.BXRead(key, afterID, blockTimeout)
+			if !ok {
+				conn.Write([]byte(resp.NullArray()))
+				return
+			}
+			results := []stream.ReadResult{{Key: key, Entries: entries}}
+			conn.Write([]byte(resp.StreamReadResults(results)))
 		}
-
-		results := s.XRead(keys, afterIDs)
-		if len(results) == 0 {
-			conn.Write([]byte(resp.NullArray()))
-			return
-		}
-		conn.Write([]byte(resp.StreamReadResults(results)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

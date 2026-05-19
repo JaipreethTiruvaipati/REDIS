@@ -17,20 +17,29 @@ type entry struct {
 
 // Store is a thread-safe in-memory key-value store supporting strings and lists.
 type Store struct {
-	mu      sync.RWMutex
-	data    map[string]entry
-	lists   map[string][]string
-	waiters map[string][]chan string // blocked BLPOP clients, per key (FIFO order)
-	streams map[string]*stream.Stream
+	mu            sync.RWMutex
+	data          map[string]entry
+	lists         map[string][]string
+	waiters       map[string][]chan string // blocked BLPOP clients, per key (FIFO order)
+	streams       map[string]*stream.Stream
+	streamWaiters map[string][]streamWaiter // blocked XREAD clients, per key (FIFO order)
+}
+
+// streamWaiter represents a blocked XREAD client waiting for new stream entries.
+// Each blocking client gets its own channel and tracks which ID it's waiting after.
+type streamWaiter struct {
+	afterID stream.EntryID    // only entries with ID > afterID will wake this waiter
+	ch      chan stream.Entry // buffered channel: receives the new entry when available
 }
 
 // New creates a new Store instance.
 func New() *Store {
 	return &Store{
-		data:    make(map[string]entry),
-		lists:   make(map[string][]string),
-		waiters: make(map[string][]chan string),
-		streams: make(map[string]*stream.Stream),
+		data:          make(map[string]entry),
+		lists:         make(map[string][]string),
+		waiters:       make(map[string][]chan string),
+		streams:       make(map[string]*stream.Stream),
+		streamWaiters: make(map[string][]streamWaiter),
 	}
 }
 
@@ -301,7 +310,10 @@ func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
 	}
 
 	st.Add(id, fields)
+	// Wake up any XREAD BLOCK clients waiting for new entries on this stream
+	s.notifyStreamWaiters(key, st.Entries[len(st.Entries)-1])
 	return id.String(), nil
+
 }
 
 // XRange returns all stream entries with IDs between start and end (inclusive).
@@ -351,4 +363,83 @@ func (s *Store) XRead(keys []string, afterIDs []stream.EntryID) []stream.ReadRes
 		}
 	}
 	return results
+}
+
+// notifyStreamWaiters wakes up any blocked XREAD clients waiting on this key
+// if the new entry satisfies their afterID condition.
+// Must be called with s.mu held (write lock).
+func (s *Store) notifyStreamWaiters(key string, entry stream.Entry) {
+	var remaining []streamWaiter
+	for _, w := range s.streamWaiters[key] {
+		if w.afterID.LessThan(entry.ID) {
+			// This entry is newer than what the waiter is looking for → wake them up
+			w.ch <- entry // buffered channel (cap 1), won't block
+		} else {
+			// This waiter is still waiting (its afterID is >= new entry)
+			remaining = append(remaining, w)
+		}
+	}
+	s.streamWaiters[key] = remaining
+}
+
+// BXRead blocks until a new entry arrives after afterID in the given stream,
+// or until the timeout expires. timeout=0 blocks indefinitely.
+// Returns the matching entries and true, or nil and false on timeout.
+func (s *Store) BXRead(key string, afterID stream.EntryID, timeout time.Duration) ([]stream.Entry, bool) {
+	s.mu.Lock()
+
+	// STEP 1: Try immediate read — no blocking needed if entries already exist
+	if st, ok := s.streams[key]; ok {
+		var entries []stream.Entry
+		for _, e := range st.Entries {
+			if afterID.LessThan(e.ID) {
+				entries = append(entries, e)
+			}
+		}
+		if len(entries) > 0 {
+			s.mu.Unlock()
+			return entries, true
+		}
+	}
+
+	// STEP 2: No entries yet — register as a waiter with a personal channel
+	ch := make(chan stream.Entry, 1) // buffered so XAdd won't block when sending
+	s.streamWaiters[key] = append(s.streamWaiters[key], streamWaiter{
+		afterID: afterID,
+		ch:      ch,
+	})
+	s.mu.Unlock()
+
+	// STEP 3: Sleep until an entry arrives or timeout fires
+	if timeout == 0 {
+		// Block indefinitely (XREAD BLOCK 0)
+		entry := <-ch
+		return []stream.Entry{entry}, true
+	}
+
+	select {
+	case entry := <-ch:
+		// Woken up by XAdd
+		return []stream.Entry{entry}, true
+
+	case <-time.After(timeout):
+		// Timeout expired — clean up our waiter
+		s.mu.Lock()
+		for i, w := range s.streamWaiters[key] {
+			if w.ch == ch {
+				s.streamWaiters[key] = append(
+					s.streamWaiters[key][:i],
+					s.streamWaiters[key][i+1:]...,
+				)
+				break
+			}
+		}
+		s.mu.Unlock()
+		// Drain the channel in case XAdd sent to it right as timeout fired
+		select {
+		case <-ch:
+		default:
+		}
+		return nil, false
+	}
 }
