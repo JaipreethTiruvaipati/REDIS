@@ -13,7 +13,7 @@ var defaultUser = &User{
 	Username:  "default",
 	NoPass:    true,
 	Passwords: []string{},
-	Flags:     []string{}, // no flags for now — later stages add "nopass" etc.
+	Flags:     []string{"nopass"}, // no flags for now — later stages add "nopass" etc.
 }
 
 // DefaultUser returns the built-in default user.
