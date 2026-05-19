@@ -2,6 +2,7 @@ package stream
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -93,7 +94,10 @@ func ParseRangeStart(idStr string) (EntryID, error) {
 // ParseRangeEnd parses an end ID for XRANGE.
 // If no sequence number provided, defaults to the maximum possible sequence.
 func ParseRangeEnd(idStr string) (EntryID, error) {
-
+	// "+" means the maximum possible ID (end of stream)
+	if idStr == "+" {
+		return EntryID{Milliseconds: math.MaxInt64, Seq: ^uint64(0)}, nil
+	}
 	if !strings.Contains(idStr, "-") {
 		ms, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
