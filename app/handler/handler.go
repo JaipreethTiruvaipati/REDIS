@@ -285,9 +285,21 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			conn.Write([]byte(resp.BulkString(auth.DefaultUser().Username)))
 
 		case "GETUSER":
-			// ... existing GETUSER code ...
+			if len(cmd.Args) < 2 {
+				conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|getuser' command")))
+				return
+			}
+			user, ok := auth.GetUser(cmd.Args[1])
+			if !ok {
+				conn.Write([]byte(resp.NullBulkString()))
+				return
+			}
+			response := "*4\r\n" +
+				resp.BulkString("flags") + resp.Array(user.Flags) +
+				resp.BulkString("passwords") + resp.Array(user.Passwords)
+			conn.Write([]byte(response))
 
-		case "SETUSER": // ← move it HERE, inside the inner switch
+		case "SETUSER":
 			if len(cmd.Args) < 2 {
 				conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|setuser' command")))
 				return
