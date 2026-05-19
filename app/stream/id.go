@@ -89,6 +89,10 @@ func ParseRangeStart(idStr string) (EntryID, error) {
 // ParseRangeEnd parses an end ID for XRANGE.
 // If no sequence number provided, defaults to the maximum possible sequence.
 func ParseRangeEnd(idStr string) (EntryID, error) {
+	// "-" means the minimum possible ID (beginning of stream)
+	if idStr == "-" {
+		return EntryID{Milliseconds: 0, Seq: 0}, nil
+	}
 	if !strings.Contains(idStr, "-") {
 		ms, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
