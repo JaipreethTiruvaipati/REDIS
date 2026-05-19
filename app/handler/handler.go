@@ -295,7 +295,9 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 				return
 			}
 			// Response: *2\r\n "flags" [flag1, flag2, ...]
-			response := "*2\r\n" + resp.BulkString("flags") + resp.Array(user.Flags)
+			response := "*4\r\n" +
+				resp.BulkString("flags") + resp.Array(user.Flags) +
+				resp.BulkString("passwords") + resp.Array(user.Passwords)
 			conn.Write([]byte(response))
 
 		default:
