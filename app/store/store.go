@@ -472,3 +472,21 @@ func (s *Store) ZAdd(key string, score float64, member string) int {
 
 	return zs.Add(score, member)
 }
+
+// ZRank returns the rank of a member in the sorted set stored at key.
+// Returns -1, false if the key or member does not exist.
+func (s *Store) ZRank(key string, member string) (int, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		return -1, false
+	}
+
+	rank := zs.Rank(member)
+	if rank == -1 {
+		return -1, false
+	}
+	return rank, true
+}

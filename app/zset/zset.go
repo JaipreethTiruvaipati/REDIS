@@ -1,5 +1,7 @@
 package zset
 
+import "sort"
+
 // Node represents a single element in the sorted set.
 type Node struct {
 	Score  float64
@@ -21,35 +23,72 @@ func New() *ZSet {
 	}
 }
 
-// Add adds a new member to the sorted set.
+// Add adds a new member to the sorted set, or updates the score of an existing one.
 // It returns 1 if a new member was added, and 0 if an existing member was updated.
 func (z *ZSet) Add(score float64, member string) int {
-	_, exists := z.dict[member]
+	oldScore, exists := z.dict[member]
 	if exists {
-		// We'll handle updating existing members in future stages.
-		return 0
+		if oldScore == score {
+			return 0 // Score is the same, no operation needed
+		}
+
+		// Find and remove the old node using binary search
+		oldIdx := sort.Search(len(z.nodes), func(i int) bool {
+			if z.nodes[i].Score == oldScore {
+				return z.nodes[i].Member >= member
+			}
+			return z.nodes[i].Score > oldScore
+		})
+
+		// Remove the element from the slice
+		if oldIdx < len(z.nodes) && z.nodes[oldIdx].Member == member {
+			z.nodes = append(z.nodes[:oldIdx], z.nodes[oldIdx+1:]...)
+		}
 	}
 
-	// 1. Add to the fast-lookup map
+	// 1. Add/Update the fast-lookup map
 	z.dict[member] = score
 
 	// 2. Add to the ordered slice and keep it sorted
 	newNode := Node{Score: score, Member: member}
 
-	// Find the correct insertion index to maintain ascending order
-	idx := 0
-	for i, node := range z.nodes {
-		// Sort by Score first. If scores are equal, sort lexicographically by Member.
-		if score < node.Score || (score == node.Score && member < node.Member) {
-			break
+	// Find the correct insertion index using binary search (O(log N))
+	idx := sort.Search(len(z.nodes), func(i int) bool {
+		if z.nodes[i].Score == score {
+			return z.nodes[i].Member >= member
 		}
-		idx = i + 1
-	}
+		return z.nodes[i].Score > score
+	})
 
 	// Insert the new node at the calculated index
 	z.nodes = append(z.nodes, Node{})    // Expand slice by 1
 	copy(z.nodes[idx+1:], z.nodes[idx:]) // Shift elements to the right
 	z.nodes[idx] = newNode
 
+	if exists {
+		return 0 // 0 members added (1 updated)
+	}
 	return 1 // 1 member was added
+}
+
+// Rank returns the 0-based index of the member in the sorted set.
+// It returns -1 if the member does not exist.
+func (z *ZSet) Rank(member string) int {
+	score, exists := z.dict[member]
+	if !exists {
+		return -1
+	}
+
+	// Use binary search (O(log N)) to find the exact position
+	idx := sort.Search(len(z.nodes), func(i int) bool {
+		if z.nodes[i].Score == score {
+			return z.nodes[i].Member >= member
+		}
+		return z.nodes[i].Score > score
+	})
+
+	if idx < len(z.nodes) && z.nodes[idx].Member == member {
+		return idx
+	}
+	return -1
 }

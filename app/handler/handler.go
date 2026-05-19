@@ -364,6 +364,24 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		addedCount := s.ZAdd(key, score, member)
 		conn.Write([]byte(resp.Integer(addedCount)))
 
+	case "ZRANK":
+		// Format: ZRANK key member
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'zrank' command")))
+			return
+		}
+
+		key := cmd.Args[0]
+		member := cmd.Args[1]
+
+		rank, exists := s.ZRank(key, member)
+		if !exists {
+			conn.Write([]byte(resp.NullBulkString()))
+			return
+		}
+
+		conn.Write([]byte(resp.Integer(rank)))
+
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
