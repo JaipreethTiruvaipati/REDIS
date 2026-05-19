@@ -303,6 +303,27 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		default:
 			conn.Write([]byte(resp.Error(fmt.Sprintf("unknown subcommand '%s' for 'acl' command", cmd.Args[0]))))
 		}
+	case "SETUSER":
+		// Format: ACL SETUSER <username> [rules...]
+		// Supported rule: >password (add password)
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|setuser' command")))
+			return
+		}
+		username := cmd.Args[1]
+		user, ok := auth.GetUser(username)
+		if !ok {
+			conn.Write([]byte(resp.Error(fmt.Sprintf("ERR User '%s' not found", username))))
+			return
+		}
+		// Process each rule (e.g. ">mypassword")
+		for _, rule := range cmd.Args[2:] {
+			if strings.HasPrefix(rule, ">") {
+				user.SetPassword(rule[1:]) // strip ">" to get raw password
+			}
+			// More rule types handled in later stages
+		}
+		conn.Write([]byte(resp.SimpleString("OK")))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

@@ -1,5 +1,10 @@
 package auth
 
+import (
+	"crypto/sha256"
+	"fmt"
+)
+
 // User represents a Redis ACL user with access control properties.
 type User struct {
 	Username  string
@@ -32,4 +37,22 @@ var userRegistry = map[string]*User{
 func GetUser(username string) (*User, bool) {
 	u, ok := userRegistry[username]
 	return u, ok
+}
+
+// SetPassword adds a SHA-256 hashed password to the user
+// and removes the nopass flag (as per Redis ACL behavior).
+func (u *User) SetPassword(password string) {
+	// Hash the password using SHA-256, stored as lowercase hex
+	hash := sha256.Sum256([]byte(password))
+	hashStr := fmt.Sprintf("%x", hash)
+	u.Passwords = append(u.Passwords, hashStr)
+	// Setting a real password removes the nopass flag
+	u.NoPass = false
+	filtered := []string{}
+	for _, f := range u.Flags {
+		if f != "nopass" {
+			filtered = append(filtered, f)
+		}
+	}
+	u.Flags = filtered
 }
