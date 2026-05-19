@@ -276,16 +276,28 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			conn.Write([]byte(resp.StreamReadResults(results)))
 		}
 	case "ACL":
-		// ACL has subcommands: WHOAMI, GETUSER, etc.
 		if len(cmd.Args) < 1 {
 			conn.Write([]byte(resp.Error("wrong number of arguments for 'acl' command")))
 			return
 		}
 		switch strings.ToUpper(cmd.Args[0]) {
 		case "WHOAMI":
-			// Returns the username of the currently authenticated connection.
-			// All connections default to the "default" user until auth is enforced.
 			conn.Write([]byte(resp.BulkString(auth.DefaultUser().Username)))
+
+		case "GETUSER":
+			if len(cmd.Args) < 2 {
+				conn.Write([]byte(resp.Error("wrong number of arguments for 'acl|getuser' command")))
+				return
+			}
+			user, ok := auth.GetUser(cmd.Args[1])
+			if !ok {
+				conn.Write([]byte(resp.NullBulkString()))
+				return
+			}
+			// Response: *2\r\n "flags" [flag1, flag2, ...]
+			response := "*2\r\n" + resp.BulkString("flags") + resp.Array(user.Flags)
+			conn.Write([]byte(response))
+
 		default:
 			conn.Write([]byte(resp.Error(fmt.Sprintf("unknown subcommand '%s' for 'acl' command", cmd.Args[0]))))
 		}
