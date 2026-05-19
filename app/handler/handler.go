@@ -429,6 +429,18 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		// Convert float to string cleanly (removing trailing zeros if any)
 		scoreStr := strconv.FormatFloat(score, 'f', -1, 64)
 		conn.Write([]byte(resp.BulkString(scoreStr)))
+	case "ZREM":
+		// Format: ZREM key member
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'zrem' command")))
+			return
+		}
+
+		key := cmd.Args[0]
+		member := cmd.Args[1]
+
+		removedCount := s.ZRem(key, member)
+		conn.Write([]byte(resp.Integer(removedCount)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

@@ -146,3 +146,29 @@ func (z *ZSet) Score(member string) (float64, bool) {
 	score, exists := z.dict[member]
 	return score, exists
 }
+
+// Remove removes the specified member from the sorted set.
+// Returns 1 if the member was removed, 0 if it did not exist.
+func (z *ZSet) Remove(member string) int {
+	score, exists := z.dict[member]
+	if !exists {
+		return 0 // Member doesn't exist
+	}
+
+	// 1. Remove from the fast-lookup map
+	delete(z.dict, member)
+
+	// 2. Remove from the ordered slice using binary search
+	idx := sort.Search(len(z.nodes), func(i int) bool {
+		if z.nodes[i].Score == score {
+			return z.nodes[i].Member >= member
+		}
+		return z.nodes[i].Score > score
+	})
+
+	if idx < len(z.nodes) && z.nodes[idx].Member == member {
+		z.nodes = append(z.nodes[:idx], z.nodes[idx+1:]...) // Remove the element
+	}
+
+	return 1
+}

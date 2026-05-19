@@ -531,3 +531,24 @@ func (s *Store) ZScore(key string, member string) (float64, bool) {
 
 	return zs.Score(member)
 }
+
+// ZRem removes a member from the sorted set at key.
+// Returns the number of members removed (1 or 0).
+func (s *Store) ZRem(key string, member string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		return 0
+	}
+
+	removed := zs.Remove(member)
+
+	// Redis automatically deletes the key if the sorted set becomes empty
+	if zs.Card() == 0 {
+		delete(s.zsets, key)
+	}
+
+	return removed
+}
