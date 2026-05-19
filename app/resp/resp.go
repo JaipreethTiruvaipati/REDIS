@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/codecrafters-io/redis-starter-go/app/stream"
 )
 
 // Command represents a parsed Redis command with its arguments.
@@ -106,4 +108,19 @@ func Array(items []string) string {
 // NullArray returns a RESP null array, used when BLPOP times out.
 func NullArray() string {
 	return "*-1\r\n"
+}
+
+// StreamEntries encodes a slice of stream entries as a RESP array of arrays.
+// Each entry is encoded as: [id_bulk_string, [field1, value1, field2, value2, ...]]
+func StreamEntries(entries []stream.Entry) string {
+	result := fmt.Sprintf("*%d\r\n", len(entries))
+	for _, e := range entries {
+		result += "*2\r\n"
+		result += BulkString(e.ID.String())
+		result += fmt.Sprintf("*%d\r\n", len(e.Fields))
+		for _, f := range e.Fields {
+			result += BulkString(f)
+		}
+	}
+	return result
 }

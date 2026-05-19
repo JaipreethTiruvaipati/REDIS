@@ -303,3 +303,24 @@ func (s *Store) XAdd(key, idStr string, fields []string) (string, error) {
 	st.Add(id, fields)
 	return id.String(), nil
 }
+
+// XRange returns all stream entries with IDs between start and end (inclusive).
+// Returns an empty slice if the stream doesn't exist or no entries match.
+func (s *Store) XRange(key string, start, end stream.EntryID) []stream.Entry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	st, ok := s.streams[key]
+	if !ok {
+		return []stream.Entry{}
+	}
+
+	var result []stream.Entry
+	for _, e := range st.Entries {
+		// Include entry if: start <= e.ID <= end
+		if !e.ID.LessThan(start) && !end.LessThan(e.ID) {
+			result = append(result, e)
+		}
+	}
+	return result
+}
