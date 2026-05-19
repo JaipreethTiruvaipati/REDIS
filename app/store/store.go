@@ -443,3 +443,15 @@ func (s *Store) BXRead(key string, afterID stream.EntryID, timeout time.Duration
 		return nil, false
 	}
 }
+
+// GetStreamLastID returns the last entry ID for a stream.
+// Returns a zero EntryID {0, 0} if the stream doesn't exist or is empty.
+func (s *Store) GetStreamLastID(key string) stream.EntryID {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st, ok := s.streams[key]
+	if !ok {
+		return stream.EntryID{} // zero value = 0-0
+	}
+	return st.LastID
+}

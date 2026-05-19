@@ -253,11 +253,19 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		} else {
 			// Blocking: use BXRead for the first key
 			key := keys[0]
-			afterID, err := stream.Parse(idStrs[0])
-			if err != nil {
-				conn.Write([]byte(resp.Error(err.Error())))
-				return
+			var afterID stream.EntryID
+			if idStrs[0] == "$" {
+				// $ = current lastID of the stream — only return entries added AFTER this command
+				afterID = s.GetStreamLastID(key)
+			} else {
+				var err error
+				afterID, err = stream.Parse(idStrs[0])
+				if err != nil {
+					conn.Write([]byte(resp.Error(err.Error())))
+					return
+				}
 			}
+
 			entries, ok := s.BXRead(key, afterID, blockTimeout)
 			if !ok {
 				conn.Write([]byte(resp.NullArray()))
