@@ -517,3 +517,17 @@ func (s *Store) ZCard(key string) int {
 
 	return zs.Card()
 }
+
+// ZScore returns the score of a member in the sorted set at key.
+// Returns 0, false if the key or member does not exist.
+func (s *Store) ZScore(key string, member string) (float64, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		return 0, false
+	}
+
+	return zs.Score(member)
+}

@@ -410,6 +410,25 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		key := cmd.Args[0]
 		card := s.ZCard(key)
 		conn.Write([]byte(resp.Integer(card)))
+	case "ZSCORE":
+		// Format: ZSCORE key member
+		if len(cmd.Args) < 2 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'zscore' command")))
+			return
+		}
+
+		key := cmd.Args[0]
+		member := cmd.Args[1]
+
+		score, exists := s.ZScore(key, member)
+		if !exists {
+			conn.Write([]byte(resp.NullBulkString()))
+			return
+		}
+
+		// Convert float to string cleanly (removing trailing zeros if any)
+		scoreStr := strconv.FormatFloat(score, 'f', -1, 64)
+		conn.Write([]byte(resp.BulkString(scoreStr)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

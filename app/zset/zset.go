@@ -139,3 +139,10 @@ func (z *ZSet) Range(start, stop int) []string {
 func (z *ZSet) Card() int {
 	return len(z.dict)
 }
+
+// Score returns the score of the member.
+// Returns the score and true if it exists, or 0 and false if it doesn't.
+func (z *ZSet) Score(member string) (float64, bool) {
+	score, exists := z.dict[member]
+	return score, exists
+}
