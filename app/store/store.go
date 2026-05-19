@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/stream"
+	"github.com/codecrafters-io/redis-starter-go/app/zset"
 )
 
 // entry holds a string value and an optional expiry time.
@@ -23,6 +24,7 @@ type Store struct {
 	waiters       map[string][]chan string // blocked BLPOP clients, per key (FIFO order)
 	streams       map[string]*stream.Stream
 	streamWaiters map[string][]streamWaiter // blocked XREAD clients, per key (FIFO order)
+	zsets         map[string]*zset.ZSet
 }
 
 // streamWaiter represents a blocked XREAD client waiting for new stream entries.
@@ -40,6 +42,7 @@ func New() *Store {
 		waiters:       make(map[string][]chan string),
 		streams:       make(map[string]*stream.Stream),
 		streamWaiters: make(map[string][]streamWaiter),
+		zsets:         make(map[string]*zset.ZSet),
 	}
 }
 
@@ -59,6 +62,23 @@ func (s *Store) SetWithExpiry(key, value string, ttl time.Duration) {
 		expiresAt: time.Now().Add(ttl),
 		hasExpiry: true,
 	}
+}
+
+// ZAdd adds a member with the specified score to the sorted set stored at key.
+func (s *Store) ZAdd(key string, score float64, member string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		zs = zset.NewZSet()
+		s.zsets[key] = zs
+	}
+
+	if zs.Add(score, member) {
+		return 1
+	}
+	return 0
 }
 
 // Get retrieves the string value for a key. Returns ("", false) if missing or expired.

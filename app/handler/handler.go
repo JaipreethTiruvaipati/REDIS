@@ -344,6 +344,26 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		*currentUser = user
 		conn.Write([]byte(resp.SimpleString("OK")))
 
+	case "ZADD":
+		// Format: ZADD key score member [score member ...]
+		if len(cmd.Args) < 3 || len(cmd.Args[1:])%2 != 0 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'zadd' command")))
+			return
+		}
+		key := cmd.Args[0]
+		added := 0
+		for i := 1; i < len(cmd.Args); i += 2 {
+			scoreStr := cmd.Args[i]
+			member := cmd.Args[i+1]
+			score, err := strconv.ParseFloat(scoreStr, 64)
+			if err != nil {
+				conn.Write([]byte(resp.Error("ERR value is not a valid float")))
+				return
+			}
+			added += s.ZAdd(key, score, member)
+		}
+		conn.Write([]byte(resp.Integer(added)))
+
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
