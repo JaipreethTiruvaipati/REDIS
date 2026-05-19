@@ -196,6 +196,39 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 		}
 		entries := s.XRange(key, start, end)
 		conn.Write([]byte(resp.StreamEntries(entries)))
+	case "XREAD":
+		// Format: XREAD STREAMS key1 [key2 ...] id1 [id2 ...]
+		if len(cmd.Args) < 3 || strings.ToUpper(cmd.Args[0]) != "STREAMS" {
+			conn.Write([]byte(resp.Error("syntax error")))
+			return
+		}
+
+		remaining := cmd.Args[1:] // everything after "STREAMS"
+		if len(remaining)%2 != 0 {
+			conn.Write([]byte(resp.Error("unbalanced STREAMS list")))
+			return
+		}
+
+		half := len(remaining) / 2
+		keys := remaining[:half]
+		idStrs := remaining[half:]
+
+		afterIDs := make([]stream.EntryID, len(idStrs))
+		for i, idStr := range idStrs {
+			id, err := stream.Parse(idStr)
+			if err != nil {
+				conn.Write([]byte(resp.Error(err.Error())))
+				return
+			}
+			afterIDs[i] = id
+		}
+
+		results := s.XRead(keys, afterIDs)
+		if len(results) == 0 {
+			conn.Write([]byte(resp.NullArray()))
+			return
+		}
+		conn.Write([]byte(resp.StreamReadResults(results)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

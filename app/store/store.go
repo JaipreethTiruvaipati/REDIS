@@ -324,3 +324,31 @@ func (s *Store) XRange(key string, start, end stream.EntryID) []stream.Entry {
 	}
 	return result
 }
+
+// XRead returns entries from one or more streams that are strictly after the given IDs.
+// Results only include streams that have at least one matching entry.
+func (s *Store) XRead(keys []string, afterIDs []stream.EntryID) []stream.ReadResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var results []stream.ReadResult
+	for i, key := range keys {
+		afterID := afterIDs[i]
+		st, ok := s.streams[key]
+		if !ok {
+			continue
+		}
+
+		var entries []stream.Entry
+		for _, e := range st.Entries {
+			if afterID.LessThan(e.ID) { // exclusive: only entries AFTER afterID
+				entries = append(entries, e)
+			}
+		}
+
+		if len(entries) > 0 {
+			results = append(results, stream.ReadResult{Key: key, Entries: entries})
+		}
+	}
+	return results
+}

@@ -8,6 +8,12 @@ type EntryID struct {
 	Seq          uint64
 }
 
+// ReadResult holds the XREAD result for a single stream.
+type ReadResult struct {
+	Key     string
+	Entries []Entry
+}
+
 // String formats an EntryID as "ms-seq".
 func (id EntryID) String() string {
 	return fmt.Sprintf("%d-%d", id.Milliseconds, id.Seq)

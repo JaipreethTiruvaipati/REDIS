@@ -124,3 +124,15 @@ func StreamEntries(entries []stream.Entry) string {
 	}
 	return result
 }
+
+// StreamReadResults encodes XREAD results as a RESP array.
+// Format: [[key, [entries...]], [key, [entries...]], ...]
+func StreamReadResults(results []stream.ReadResult) string {
+	result := fmt.Sprintf("*%d\r\n", len(results))
+	for _, r := range results {
+		result += "*2\r\n"
+		result += BulkString(r.Key)
+		result += StreamEntries(r.Entries) // reuse existing encoder
+	}
+	return result
+}
