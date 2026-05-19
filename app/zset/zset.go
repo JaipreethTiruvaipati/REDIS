@@ -92,3 +92,26 @@ func (z *ZSet) Rank(member string) int {
 	}
 	return -1
 }
+
+// Range returns a slice of members within the specified rank range (inclusive).
+// If start is out of bounds or start > stop, it returns an empty slice.
+func (z *ZSet) Range(start, stop int) []string {
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(z.nodes) {
+		return []string{}
+	}
+	if stop >= len(z.nodes) {
+		stop = len(z.nodes) - 1
+	}
+	if start > stop {
+		return []string{}
+	}
+
+	var members []string
+	for i := start; i <= stop; i++ {
+		members = append(members, z.nodes[i].Member)
+	}
+	return members
+}

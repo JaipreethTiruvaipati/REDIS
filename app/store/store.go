@@ -490,3 +490,16 @@ func (s *Store) ZRank(key string, member string) (int, bool) {
 	}
 	return rank, true
 }
+
+// ZRange returns members within the specified rank range for the sorted set at key.
+func (s *Store) ZRange(key string, start, stop int) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		return []string{} // Return empty slice if key doesn't exist
+	}
+
+	return zs.Range(start, stop)
+}

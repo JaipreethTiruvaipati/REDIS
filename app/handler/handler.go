@@ -382,6 +382,25 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 
 		conn.Write([]byte(resp.Integer(rank)))
 
+	case "ZRANGE":
+		// Format: ZRANGE key start stop
+		if len(cmd.Args) < 3 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'zrange' command")))
+			return
+		}
+
+		key := cmd.Args[0]
+		start, err1 := strconv.Atoi(cmd.Args[1])
+		stop, err2 := strconv.Atoi(cmd.Args[2])
+
+		if err1 != nil || err2 != nil {
+			conn.Write([]byte(resp.Error("ERR value is not an integer or out of range")))
+			return
+		}
+
+		members := s.ZRange(key, start, stop)
+		conn.Write([]byte(resp.Array(members)))
+
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
