@@ -1,52 +1,55 @@
 package zset
 
-import "sort"
-
-type ZSetNode struct {
-	Member string
+// Node represents a single element in the sorted set.
+type Node struct {
 	Score  float64
+	Member string
 }
 
+// ZSet represents a Redis Sorted Set.
+// It uses a map for O(1) lookups, and a slice to maintain score ordering.
 type ZSet struct {
-	Dict map[string]float64
-	List []ZSetNode
+	nodes []Node
+	dict  map[string]float64
 }
 
-func NewZSet() *ZSet {
+// New creates a new, empty ZSet.
+func New() *ZSet {
 	return &ZSet{
-		Dict: make(map[string]float64),
-		List: make([]ZSetNode, 0),
+		nodes: make([]Node, 0),
+		dict:  make(map[string]float64),
 	}
 }
 
-// Add adds or updates a member. Returns true if it was a new member.
-func (zs *ZSet) Add(score float64, member string) bool {
-	oldScore, exists := zs.Dict[member]
+// Add adds a new member to the sorted set.
+// It returns 1 if a new member was added, and 0 if an existing member was updated.
+func (z *ZSet) Add(score float64, member string) int {
+	_, exists := z.dict[member]
 	if exists {
-		if oldScore == score {
-			return false // No change
-		}
-		// Remove old node from List
-		for i, node := range zs.List {
-			if node.Member == member {
-				zs.List = append(zs.List[:i], zs.List[i+1:]...)
-				break
-			}
-		}
+		// We'll handle updating existing members in future stages.
+		return 0
 	}
-	
-	zs.Dict[member] = score
 
-	// Insert into List in sorted order
-	// Primary sort by score, secondary sort by lex order of member
-	newNode := ZSetNode{Member: member, Score: score}
-	zs.List = append(zs.List, newNode)
-	sort.Slice(zs.List, func(i, j int) bool {
-		if zs.List[i].Score == zs.List[j].Score {
-			return zs.List[i].Member < zs.List[j].Member
+	// 1. Add to the fast-lookup map
+	z.dict[member] = score
+
+	// 2. Add to the ordered slice and keep it sorted
+	newNode := Node{Score: score, Member: member}
+
+	// Find the correct insertion index to maintain ascending order
+	idx := 0
+	for i, node := range z.nodes {
+		// Sort by Score first. If scores are equal, sort lexicographically by Member.
+		if score < node.Score || (score == node.Score && member < node.Member) {
+			break
 		}
-		return zs.List[i].Score < zs.List[j].Score
-	})
+		idx = i + 1
+	}
 
-	return !exists
+	// Insert the new node at the calculated index
+	z.nodes = append(z.nodes, Node{})    // Expand slice by 1
+	copy(z.nodes[idx+1:], z.nodes[idx:]) // Shift elements to the right
+	z.nodes[idx] = newNode
+
+	return 1 // 1 member was added
 }

@@ -64,23 +64,6 @@ func (s *Store) SetWithExpiry(key, value string, ttl time.Duration) {
 	}
 }
 
-// ZAdd adds a member with the specified score to the sorted set stored at key.
-func (s *Store) ZAdd(key string, score float64, member string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	zs, ok := s.zsets[key]
-	if !ok {
-		zs = zset.NewZSet()
-		s.zsets[key] = zs
-	}
-
-	if zs.Add(score, member) {
-		return 1
-	}
-	return 0
-}
-
 // Get retrieves the string value for a key. Returns ("", false) if missing or expired.
 func (s *Store) Get(key string) (string, bool) {
 	s.mu.RLock()
@@ -474,4 +457,18 @@ func (s *Store) GetStreamLastID(key string) stream.EntryID {
 		return stream.EntryID{} // zero value = 0-0
 	}
 	return st.LastID
+}
+
+// ZAdd adds a member with a score to the sorted set stored at key.
+func (s *Store) ZAdd(key string, score float64, member string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		zs = zset.New()
+		s.zsets[key] = zs
+	}
+
+	return zs.Add(score, member)
 }
