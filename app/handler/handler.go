@@ -19,7 +19,7 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 	cmdName := strings.ToUpper(cmd.Name)
 
 	if *currentUser == nil && cmdName != "AUTH" {
-		conn.Write([]byte(resp.Error("NOAUTH Authentication required.")))
+		conn.Write([]byte("-NOAUTH Authentication required.\r\n"))
 		return
 	}
 
