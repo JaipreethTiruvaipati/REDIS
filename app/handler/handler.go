@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/app/stream"
+
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
 )
@@ -175,6 +177,25 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store) {
 			return
 		}
 		conn.Write([]byte(resp.BulkString(entryID)))
+	case "XRANGE":
+		// Format: XRANGE key start end
+		if len(cmd.Args) < 3 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'xrange' command")))
+			return
+		}
+		key := cmd.Args[0]
+		start, err := stream.ParseRangeStart(cmd.Args[1])
+		if err != nil {
+			conn.Write([]byte(resp.Error(err.Error())))
+			return
+		}
+		end, err := stream.ParseRangeEnd(cmd.Args[2])
+		if err != nil {
+			conn.Write([]byte(resp.Error(err.Error())))
+			return
+		}
+		entries := s.XRange(key, start, end)
+		conn.Write([]byte(resp.StreamEntries(entries)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))

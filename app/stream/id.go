@@ -72,3 +72,29 @@ func GenerateFull(lastID EntryID) EntryID {
 	ms := time.Now().UnixMilli()
 	return GenerateSeq(ms, lastID) // reuse existing seq logic
 }
+
+// ParseRangeStart parses a start ID for XRANGE.
+// If no sequence number provided, defaults to 0.
+func ParseRangeStart(idStr string) (EntryID, error) {
+	if !strings.Contains(idStr, "-") {
+		ms, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			return EntryID{}, fmt.Errorf("invalid start ID: %s", idStr)
+		}
+		return EntryID{Milliseconds: ms, Seq: 0}, nil
+	}
+	return Parse(idStr)
+}
+
+// ParseRangeEnd parses an end ID for XRANGE.
+// If no sequence number provided, defaults to the maximum possible sequence.
+func ParseRangeEnd(idStr string) (EntryID, error) {
+	if !strings.Contains(idStr, "-") {
+		ms, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			return EntryID{}, fmt.Errorf("invalid end ID: %s", idStr)
+		}
+		return EntryID{Milliseconds: ms, Seq: ^uint64(0)}, nil // max uint64
+	}
+	return Parse(idStr)
+}
