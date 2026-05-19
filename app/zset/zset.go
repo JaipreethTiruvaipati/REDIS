@@ -134,3 +134,8 @@ func (z *ZSet) Range(start, stop int) []string {
 	}
 	return members
 }
+
+// Card returns the number of elements in the sorted set.
+func (z *ZSet) Card() int {
+	return len(z.dict)
+}

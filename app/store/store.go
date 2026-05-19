@@ -503,3 +503,17 @@ func (s *Store) ZRange(key string, start, stop int) []string {
 
 	return zs.Range(start, stop)
 }
+
+// ZCard returns the cardinality of the sorted set at key.
+// Returns 0 if the key does not exist.
+func (s *Store) ZCard(key string) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	zs, ok := s.zsets[key]
+	if !ok {
+		return 0
+	}
+
+	return zs.Card()
+}

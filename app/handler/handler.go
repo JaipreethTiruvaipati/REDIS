@@ -400,6 +400,16 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 
 		members := s.ZRange(key, start, stop)
 		conn.Write([]byte(resp.Array(members)))
+	case "ZCARD":
+		// Format: ZCARD key
+		if len(cmd.Args) < 1 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'zcard' command")))
+			return
+		}
+
+		key := cmd.Args[0]
+		card := s.ZCard(key)
+		conn.Write([]byte(resp.Integer(card)))
 
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
