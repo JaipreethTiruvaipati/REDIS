@@ -23,6 +23,13 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		conn.Write([]byte("-NOAUTH Authentication required.\r\n"))
 		return
 	}
+	// While inside a transaction, queue commands instead of executing them.
+	// EXEC is the only command that runs immediately (still with an empty *0 for now).
+	if tx.InTransaction && cmdName != "EXEC" {
+		tx.Enqueue(cmd)
+		conn.Write([]byte(resp.SimpleString("QUEUED"))) // +QUEUED\r\n
+		return
+	}
 
 	switch cmdName {
 	case "PING":
@@ -467,11 +474,11 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 			conn.Write([]byte(resp.Error("EXEC without MULTI")))
 			return
 		}
-	
+
 		// Empty transaction (no queued commands) — Redis returns an empty array
 		tx.End()
 		conn.Write([]byte(resp.Array([]string{}))) // *0\r\n
-	
+
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
