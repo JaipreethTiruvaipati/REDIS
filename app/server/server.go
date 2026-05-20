@@ -10,6 +10,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/handler"
 	"github.com/codecrafters-io/redis-starter-go/app/resp"
 	"github.com/codecrafters-io/redis-starter-go/app/store"
+	"github.com/codecrafters-io/redis-starter-go/app/transactions"
 )
 
 // Server holds the TCP listener configuration and shared state.
@@ -53,7 +54,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if defaultUser.NoPass {
 		currentUser = defaultUser
 	}
-
+    var txState transactions.State
 	for {
 		cmd, err := resp.Parse(reader)
 		if err != nil {
@@ -62,6 +63,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			return
 		}
-		handler.Handle(cmd, conn, s.store, &currentUser)
+		handler.Handle(cmd, conn, s.store, &currentUser, &txState)
 	}
 }
