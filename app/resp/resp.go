@@ -136,3 +136,13 @@ func StreamReadResults(results []stream.ReadResult) string {
 	}
 	return result
 }
+
+// ArrayOfReplies encodes a RESP array whose elements are already-encoded RESP values.
+// Example: ArrayOfReplies([]string{"+OK\r\n", ":7\r\n"}) → *2\r\n+OK\r\n:7\r\n
+func ArrayOfReplies(replies []string) string {
+	result := fmt.Sprintf("*%d\r\n", len(replies))
+	for _, r := range replies {
+		result += r
+	}
+	return result
+}
