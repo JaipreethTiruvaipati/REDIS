@@ -555,24 +555,28 @@ func (s *Store) ZRem(key string, member string) int {
 }
 
 // Incr increments the integer value stored at key by 1.
-// The key must exist and hold a string that parses as a base-10 integer.
+// If the key does not exist or has expired, it is created with value 1.
+// If the key exists, its value must be a base-10 integer string.
 // Returns the new value after incrementing.
 func (s *Store) Incr(key string) (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	e, ok := s.data[key]
-	if !ok {
-		return 0, fmt.Errorf("key not found")
+
+	// Missing or expired key → Redis sets value to 1
+	if !ok || (e.hasExpiry && time.Now().After(e.expiresAt)) {
+		s.data[key] = entry{value: "1"}
+		return 1, nil
 	}
-	// Treat expired keys as missing (same rule as Get)
-	if e.hasExpiry && time.Now().After(e.expiresAt) {
-		return 0, fmt.Errorf("key not found")
-	}
+
 	newValue, newInt, err := transactions.IncrementByOne(e.value)
 	if err != nil {
 		return 0, err
 	}
+
 	e.value = newValue
 	s.data[key] = e // update in place — preserves EX/PX expiry
+
 	return newInt, nil
 }
