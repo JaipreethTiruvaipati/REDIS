@@ -468,6 +468,10 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 			return
 		}
 	
+		// Empty transaction (no queued commands) — Redis returns an empty array
+		tx.End()
+		conn.Write([]byte(resp.Array([]string{}))) // *0\r\n
+	
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
