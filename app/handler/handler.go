@@ -461,6 +461,13 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		// Format: MULTI — starts a transaction; further commands are queued (later stages)
 		tx.Begin()
 		conn.Write([]byte(resp.SimpleString("OK")))
+	case "EXEC":
+		// Format: EXEC — runs queued commands; error if MULTI was not called
+		if !tx.InTransaction {
+			conn.Write([]byte(resp.Error("EXEC without MULTI")))
+			return
+		}
+	
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
