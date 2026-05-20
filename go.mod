@@ -1,3 +1,3 @@
-module github.com/codecrafters-io/redis-starter-go
+module github.com/jaipreethtiruvaipati/redis-clone
 
 go 1.26.0

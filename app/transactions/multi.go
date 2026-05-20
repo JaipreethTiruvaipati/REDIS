@@ -1,6 +1,6 @@
 package transactions
 
-import "github.com/codecrafters-io/redis-starter-go/app/resp"
+import "github.com/jaipreethtiruvaipati/redis-clone/app/resp"
 
 // State holds per-connection transaction state for one client connection.
 type State struct {

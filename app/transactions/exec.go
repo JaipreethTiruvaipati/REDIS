@@ -1,6 +1,6 @@
 package transactions
 
-import "github.com/codecrafters-io/redis-starter-go/app/resp"
+import "github.com/jaipreethtiruvaipati/redis-clone/app/resp"
 
 // RunQueue executes each queued command using fn and collects RESP-encoded replies.
 // If a command fails, its error reply is included in the result and remaining commands still run.

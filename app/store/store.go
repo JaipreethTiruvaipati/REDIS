@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/stream"
-	"github.com/codecrafters-io/redis-starter-go/app/transactions"
-	"github.com/codecrafters-io/redis-starter-go/app/zset"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/stream"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/transactions"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/zset"
 )
 
 // entry holds a string value and an optional expiry time.

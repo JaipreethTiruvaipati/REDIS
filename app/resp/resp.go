@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/codecrafters-io/redis-starter-go/app/stream"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/stream"
 )
 
 // Command represents a parsed Redis command with its arguments.

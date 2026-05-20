@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codecrafters-io/redis-starter-go/app/stream"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/stream"
 
-	"github.com/codecrafters-io/redis-starter-go/app/auth"
-	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/store"
-	"github.com/codecrafters-io/redis-starter-go/app/transactions"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/auth"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/resp"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/store"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/transactions"
 )
 
 // Handle processes a single parsed command and writes the response to the connection.

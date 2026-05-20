@@ -6,11 +6,11 @@ import (
 	"io"
 	"net"
 
-	"github.com/codecrafters-io/redis-starter-go/app/auth"
-	"github.com/codecrafters-io/redis-starter-go/app/handler"
-	"github.com/codecrafters-io/redis-starter-go/app/resp"
-	"github.com/codecrafters-io/redis-starter-go/app/store"
-	"github.com/codecrafters-io/redis-starter-go/app/transactions"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/auth"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/handler"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/resp"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/store"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/transactions"
 )
 
 // Server holds the TCP listener configuration and shared state.

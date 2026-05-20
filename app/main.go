@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/codecrafters-io/redis-starter-go/app/server"
+	"github.com/jaipreethtiruvaipati/redis-clone/app/server"
 )
 
 func main() {
