@@ -31,5 +31,5 @@ func (st *State) Enqueue(cmd *resp.Command) {
 // End clears transaction state after EXEC or DISCARD completes.
 func (st *State) End() {
 	st.InTransaction = false
-	// st.Queue = nil  // add when you introduce a command queue in the next stage
+	st.Queue = nil
 }

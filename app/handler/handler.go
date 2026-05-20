@@ -26,8 +26,8 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 		return
 	}
 	// While inside a transaction, queue commands instead of executing them.
-	// EXEC is the only command that runs immediately.
-	if tx.InTransaction && cmdName != "EXEC" {
+	// EXEC and DISCARD run immediately without being queued.
+	if tx.InTransaction && cmdName != "EXEC" && cmdName != "DISCARD" {
 		tx.Enqueue(cmd)
 		conn.Write([]byte(resp.SimpleString("QUEUED"))) // +QUEUED\r\n
 		return
@@ -494,6 +494,16 @@ func dispatch(cmd *resp.Command, w io.Writer, s *store.Store, currentUser **auth
 
 		tx.End()
 		w.Write([]byte(resp.ArrayOfReplies(replies)))
+
+	case "DISCARD":
+		// Format: DISCARD — aborts a transaction and discards queued commands
+		if !tx.InTransaction {
+			w.Write([]byte(resp.Error("DISCARD without MULTI")))
+			return
+		}
+
+		tx.End()
+		w.Write([]byte(resp.SimpleString("OK")))
 
 	default:
 		w.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
