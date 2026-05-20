@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/stream"
+	"github.com/codecrafters-io/redis-starter-go/app/transactions"
 	"github.com/codecrafters-io/redis-starter-go/app/zset"
 )
 
@@ -551,4 +552,27 @@ func (s *Store) ZRem(key string, member string) int {
 	}
 
 	return removed
+}
+
+// Incr increments the integer value stored at key by 1.
+// The key must exist and hold a string that parses as a base-10 integer.
+// Returns the new value after incrementing.
+func (s *Store) Incr(key string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.data[key]
+	if !ok {
+		return 0, fmt.Errorf("key not found")
+	}
+	// Treat expired keys as missing (same rule as Get)
+	if e.hasExpiry && time.Now().After(e.expiresAt) {
+		return 0, fmt.Errorf("key not found")
+	}
+	newValue, newInt, err := transactions.IncrementByOne(e.value)
+	if err != nil {
+		return 0, err
+	}
+	e.value = newValue
+	s.data[key] = e // update in place — preserves EX/PX expiry
+	return newInt, nil
 }

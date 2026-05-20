@@ -441,7 +441,21 @@ func Handle(cmd *resp.Command, conn net.Conn, s *store.Store, currentUser **auth
 
 		removedCount := s.ZRem(key, member)
 		conn.Write([]byte(resp.Integer(removedCount)))
-
+    case "INCR":
+		// Format: INCR key
+		if len(cmd.Args) < 1 {
+			conn.Write([]byte(resp.Error("wrong number of arguments for 'incr' command")))
+			return
+		}
+	
+		newVal, err := s.Incr(cmd.Args[0])
+		if err != nil {
+			// Stage 1 won't hit this; later stages map missing/non-numeric keys here
+			conn.Write([]byte(resp.Error("value is not an integer or out of range")))
+			return
+		}
+	
+		conn.Write([]byte(resp.Integer(newVal)))
 	default:
 		conn.Write([]byte(resp.Error(fmt.Sprintf("unknown command '%s'", cmd.Name))))
 	}
