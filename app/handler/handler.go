@@ -468,7 +468,6 @@ func dispatch(cmd *resp.Command, w io.Writer, s *store.Store, currentUser **auth
 
 		newVal, err := s.Incr(cmd.Args[0])
 		if err != nil {
-			// Stage 1 won't hit this; later stages map missing/non-numeric keys here
 			w.Write([]byte(resp.Error("value is not an integer or out of range")))
 			return
 		}
@@ -485,12 +484,12 @@ func dispatch(cmd *resp.Command, w io.Writer, s *store.Store, currentUser **auth
 			return
 		}
 
-		replies := make([]string, 0, len(tx.Queue))
-		for _, queuedCmd := range tx.Queue {
+		// Run every queued command; failures are captured as error replies, others still execute
+		replies := tx.RunQueue(func(queuedCmd *resp.Command) string {
 			var buf bytes.Buffer
 			dispatch(queuedCmd, &buf, s, currentUser, tx)
-			replies = append(replies, buf.String())
-		}
+			return buf.String()
+		})
 
 		tx.End()
 		w.Write([]byte(resp.ArrayOfReplies(replies)))

@@ -28,6 +28,7 @@ func (st *State) Enqueue(cmd *resp.Command) {
 		Args: argsCopy,
 	})
 }
+
 // End clears transaction state after EXEC or DISCARD completes.
 func (st *State) End() {
 	st.InTransaction = false

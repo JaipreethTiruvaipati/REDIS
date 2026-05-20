@@ -54,7 +54,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if defaultUser.NoPass {
 		currentUser = defaultUser
 	}
-    var txState transactions.State
+	// Each connection has its own transaction state so multiple clients can run MULTI/EXEC concurrently.
+	var txState transactions.State
 	for {
 		cmd, err := resp.Parse(reader)
 		if err != nil {
