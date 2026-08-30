@@ -483,24 +483,57 @@ func (s *Store) BLPopMultiContext(ctx context.Context, keys []string, timeout ti
 	if len(keys) == 0 {
 		return "", "", false, fmt.Errorf("at least one key is required")
 	}
+
+	// Check existing values and register every waiter while holding the same
+	// store lock. Doing these operations separately lets a producer push after
+	// the empty check but before a waiter is registered, leaving that waiter
+	// blocked until timeout even though the list contains an item.
+	type registration struct {
+		key string
+		ch  chan listWaiterResult
+	}
+	s.mu.Lock()
 	for _, key := range keys {
-		value, ok, err := s.LPopChecked(key)
-		if err != nil {
+		if err := s.ensureTypeLocked(key, TypeList); err != nil {
+			s.mu.Unlock()
 			return "", "", false, err
 		}
-		if ok {
+		if list := s.lists[key]; len(list) > 0 {
+			value := list[0]
+			s.lists[key] = list[1:]
+			if len(s.lists[key]) == 0 {
+				delete(s.lists, key)
+			}
+			s.mu.Unlock()
 			return key, value, true, nil
 		}
 	}
+	waiters := make([]registration, 0, len(keys))
+	for _, key := range keys {
+		ch := make(chan listWaiterResult, 1)
+		s.waiters[key] = append(s.waiters[key], listWaiter{ch: ch})
+		waiters = append(waiters, registration{key: key, ch: ch})
+	}
+	s.mu.Unlock()
 
 	waitCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	results := make(chan multiListResult, len(keys))
-	for _, key := range keys {
-		go func(key string) {
-			value, ok, err := s.BLPopContext(waitCtx, key, 0)
-			results <- multiListResult{key: key, value: value, ok: ok, err: err}
-		}(key)
+	results := make(chan multiListResult, len(waiters))
+	for _, waiter := range waiters {
+		go func(waiter registration) {
+			select {
+			case result := <-waiter.ch:
+				if result.canceled {
+					results <- multiListResult{key: waiter.key}
+					return
+				}
+				results <- multiListResult{key: waiter.key, value: result.value, ok: true}
+			case <-waitCtx.Done():
+				s.removeListWaiter(waiter.key, waiter.ch)
+				s.restoreListValueIfNotCanceled(waiter.key, waiter.ch)
+				results <- multiListResult{key: waiter.key, err: waitCtx.Err()}
+			}
+		}(waiter)
 	}
 
 	var timeoutCh <-chan time.Time
@@ -520,6 +553,8 @@ func (s *Store) BLPopMultiContext(ctx context.Context, keys []string, timeout ti
 				return "", "", false, result.err
 			}
 			if result.ok {
+				cancel()
+				s.drainMultiListResults(results, remaining)
 				return result.key, result.value, true, nil
 			}
 		case <-ctx.Done():
