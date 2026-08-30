@@ -1,0 +1,18 @@
+import { ArrowRight, Box, Braces, Clock3, GitBranch, KeyRound, List, LockKeyhole, Radio, Server, ShieldCheck, Waypoints, Zap } from 'lucide-react'
+import type { Page } from '../components/Layout'
+import type { ServerInfo } from '../types/api'
+
+export function OverviewPage({ server, setPage }: { server?: ServerInfo; setPage: (page: Page) => void }) {
+  const capabilities = [
+    ['TCP', 'Concurrent client connections', Radio], ['RESP2', 'Bounded protocol parser', Braces], ['Strings', 'SET · GET · INCR · TTL', Box],
+    ['Lists', 'Blocking BLPOP queues', List], ['Sorted sets', 'Ranked members', Zap], ['Streams', 'Ordered event log', Waypoints],
+    ['Transactions', 'Connection-scoped MULTI/EXEC', GitBranch], ['Auth', 'Configurable gateway + Redis auth', LockKeyhole],
+  ] as const
+  return <div className="overview-page"><div className="hero-grid"><div className="hero-copy"><div className="eyebrow green">SYSTEMS ENGINEERING / 01</div><h1>Redis-compatible.<br /><em>Built from scratch.</em></h1><p className="hero-lede">MyRedis is an in-memory database server implemented in Go — from RESP parsing to blocking data structures — with an application gateway on top.</p><div className="hero-actions"><button className="button primary" onClick={() => setPage('console')}>Open console <ArrowRight size={15} /></button><button className="button ghost" onClick={() => setPage('server')}>View server status</button></div></div><div className="architecture-card"><div className="card-topline"><span className="eyebrow">REQUEST PATH</span><span className="live-label"><span className="pulse-dot" /> LIVE TOPOLOGY</span></div><div className="architecture-flow"><FlowNode label="Browser" detail="HTTP / JSON" /><FlowLine /><FlowNode label="Gateway" detail="Policy + API" accent /><FlowLine /><FlowNode label="Redis client" detail="TCP + RESP" /><FlowLine /><FlowNode label="MyRedis" detail="Go engine" accent strong /><FlowLine /><FlowNode label="Store" detail="In-memory" /></div><div className="architecture-foot"><span><span className="tiny-dot green-dot" /> {server?.status === 'ok' ? 'Connected to MyRedis' : 'Checking engine...'}</span><span className="mono">{server?.redis_addr || '127.0.0.1:6379'}</span></div></div></div>
+    <div className="section-heading"><div><div className="eyebrow">WHAT IS RUNNING</div><h2>One engine. Eight primitives.</h2></div><span className="section-note">Actual capabilities, no placeholder metrics.</span></div><div className="capability-grid">{capabilities.map(([title, detail, Icon]) => <div className="capability" key={title}><div className="capability-icon"><Icon size={17} /></div><div><strong>{title}</strong><span>{detail}</span></div></div>)}</div>
+    <div className="why-grid"><div><div className="eyebrow">WHY THIS PROJECT MATTERS</div><h2>A database you can read end to end.</h2></div><div className="why-copy"><p>This console is a window into systems engineering: a wire protocol, concurrent TCP clients, lazy expiration, blocking waiters, typed structures, and connection-local transactions.</p><div className="why-points"><span><ShieldCheck size={15} /> Observable behavior over abstractions</span><span><Clock3 size={15} /> Explicit timeouts and cancellation</span><span><Server size={15} /> External access through the real protocol</span></div></div></div>
+  </div>
+}
+
+function FlowNode({ label, detail, accent, strong }: { label: string; detail: string; accent?: boolean; strong?: boolean }) { return <div className={`flow-node ${accent ? 'accent' : ''} ${strong ? 'strong' : ''}`}><span>{label}</span><small>{detail}</small></div> }
+function FlowLine() { return <div className="flow-line"><span /></div> }

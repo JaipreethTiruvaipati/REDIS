@@ -16,46 +16,81 @@ type Command struct {
 	Args []string
 }
 
+// Limits controls the amount of input accepted by the RESP command parser.
+// The defaults are intentionally conservative for this in-memory server.
+type Limits struct {
+	MaxArrayElements    int
+	MaxBulkStringLength int
+	MaxLineLength       int
+}
+
+var DefaultLimits = Limits{
+	MaxArrayElements:    1024,
+	MaxBulkStringLength: 16 * 1024 * 1024,
+	MaxLineLength:       64 * 1024,
+}
+
 // Parse reads and parses a RESP-encoded command from the reader.
 func Parse(r *bufio.Reader) (*Command, error) {
-	line, err := r.ReadString('\n')
+	return ParseWithLimits(r, DefaultLimits)
+}
+
+// ParseWithLimits reads one RESP2 array of bulk strings while enforcing limits.
+// It rejects malformed CRLF delimiters, negative/impossibly large lengths and
+// truncated frames before making any large allocation.
+func ParseWithLimits(r *bufio.Reader, limits Limits) (*Command, error) {
+	if limits.MaxArrayElements <= 0 || limits.MaxBulkStringLength < 0 || limits.MaxLineLength < 2 {
+		return nil, fmt.Errorf("invalid RESP parser limits")
+	}
+
+	line, err := readLine(r, limits.MaxLineLength)
 	if err != nil {
 		return nil, err
 	}
-	line = strings.TrimRight(line, "\r\n")
 
 	if len(line) == 0 || line[0] != '*' {
-		return nil, fmt.Errorf("expected array, got %q", line)
+		return nil, fmt.Errorf("expected array, got %q", string(line))
 	}
 
-	count, err := strconv.Atoi(line[1:])
+	count64, err := strconv.ParseInt(string(line[1:]), 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("invalid array count: %w", err)
 	}
+	if count64 < 0 || count64 > int64(limits.MaxArrayElements) {
+		return nil, fmt.Errorf("array count %d is out of range", count64)
+	}
+	count := int(count64)
 
 	args := make([]string, 0, count)
 	for i := 0; i < count; i++ {
 		// Read the bulk string header e.g. "$4"
-		line, err = r.ReadString('\n')
+		line, err = readLine(r, limits.MaxLineLength)
 		if err != nil {
 			return nil, err
 		}
-		line = strings.TrimRight(line, "\r\n")
 
 		if len(line) == 0 || line[0] != '$' {
-			return nil, fmt.Errorf("expected bulk string, got %q", line)
+			return nil, fmt.Errorf("expected bulk string, got %q", string(line))
 		}
 
-		length, err := strconv.Atoi(line[1:])
+		length64, err := strconv.ParseInt(string(line[1:]), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid bulk string length: %w", err)
 		}
+		maxInt := int64(^uint(0) >> 1)
+		if length64 < 0 || length64 > int64(limits.MaxBulkStringLength) || length64 > maxInt-2 {
+			return nil, fmt.Errorf("bulk string length %d is out of range", length64)
+		}
+		length := int(length64)
 
 		// Read exactly `length` bytes + trailing \r\n
 		data := make([]byte, length+2)
 		_, err = io.ReadFull(r, data)
 		if err != nil {
 			return nil, err
+		}
+		if data[length] != '\r' || data[length+1] != '\n' {
+			return nil, fmt.Errorf("bulk string is missing CRLF terminator")
 		}
 		args = append(args, string(data[:length]))
 	}
@@ -70,6 +105,34 @@ func Parse(r *bufio.Reader) (*Command, error) {
 	}, nil
 }
 
+func readLine(r *bufio.Reader, max int) ([]byte, error) {
+	line := make([]byte, 0, min(max, 128))
+	for {
+		part, err := r.ReadSlice('\n')
+		line = append(line, part...)
+		if len(line) > max {
+			return nil, fmt.Errorf("RESP line exceeds maximum length of %d bytes", max)
+		}
+		if err == nil {
+			break
+		}
+		if err != bufio.ErrBufferFull {
+			return nil, err
+		}
+	}
+	if len(line) < 2 || line[len(line)-2] != '\r' || line[len(line)-1] != '\n' {
+		return nil, fmt.Errorf("malformed RESP line terminator")
+	}
+	return line[:len(line)-2], nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // SimpleString encodes s as a RESP simple string e.g. +PONG\r\n
 func SimpleString(s string) string {
 	return fmt.Sprintf("+%s\r\n", s)
@@ -82,6 +145,9 @@ func BulkString(s string) string {
 
 // Error encodes s as a RESP error.
 func Error(s string) string {
+	if strings.HasPrefix(s, "ERR ") {
+		return fmt.Sprintf("-%s\r\n", s)
+	}
 	return fmt.Sprintf("-ERR %s\r\n", s)
 }
 

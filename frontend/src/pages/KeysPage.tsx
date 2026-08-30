@@ -1,0 +1,22 @@
+import { ArrowUpRight, Braces, KeyRound, List, Search, Sparkles, Waypoints, Zap } from 'lucide-react'
+import { useState } from 'react'
+import type { KeyDetails, RedisResponse } from '../types/api'
+import { ResponseRenderer } from '../components/ResponseRenderer'
+
+export function KeysPage({ inspect }: { inspect: (key: string) => Promise<KeyDetails> }) {
+  const [key, setKey] = useState('')
+  const [details, setDetails] = useState<KeyDetails>()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string>()
+  const run = async () => { if (!key.trim()) return; setLoading(true); setError(undefined); try { setDetails(await inspect(key.trim())) } catch (e) { setError(e instanceof Error ? e.message : 'Inspection failed'); setDetails(undefined) } finally { setLoading(false) } }
+  return <section className="page-stack"><div className="page-heading"><div><div className="eyebrow">DATA EXPLORER</div><h1>Key inspector</h1><p>Inspect a known key through Redis commands. The engine does not expose key enumeration yet.</p></div><div className="page-icon"><KeyRound size={20} /></div></div><div className="inspect-form"><div className="input-with-icon"><Search size={16} /><input value={key} onChange={e => setKey(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void run() }} placeholder="Enter a known key, e.g. counter" /><kbd>↵</kbd></div><button className="button primary" onClick={() => void run()} disabled={loading || !key.trim()}>{loading ? <span className="spinner" /> : <ArrowUpRight size={15} />} Inspect</button></div><div className="limitation-note"><Sparkles size={15} /><span><strong>Key enumeration is intentionally unavailable.</strong> There is no KEYS or SCAN command in MyRedis. Enter a known key to inspect it through the gateway.</span></div>{error && <div className="inline-error static">{error}</div>}{details && <KeyResult details={details} />}</section>
+}
+
+function KeyResult({ details }: { details: KeyDetails }) {
+  if (!details.ok || details.error) return <div className="empty-state"><KeyRound size={24} /><strong>Key unavailable</strong><span>{details.error?.message || 'The key could not be inspected.'}</span></div>
+  const type = details.type || 'string'; const Icon = type === 'list' ? List : type === 'zset' ? Zap : type === 'stream' ? Waypoints : Braces
+  return <div className="key-result"><div className="key-result-header"><div><span className="eyebrow">INSPECTED KEY</span><h2>{details.key}</h2></div><span className={`type-chip ${type}`}><Icon size={14} /> {type.toUpperCase()}</span></div><div className="key-result-body">{type === 'string' ? <div className="string-value"><span className="eyebrow">VALUE</span><code>{String(details.response?.value ?? '')}</code><span className="muted">TTL information is not currently exposed by the gateway.</span></div> : type === 'list' ? <Rows response={details.response} label="INDEX" /> : type === 'zset' ? <Rows response={details.response} label="RANK" note="The current inspection endpoint returns members; scores require individual ZSCORE commands." /> : <StreamRows response={details.response} />}</div><div className="key-result-foot"><span>via <b>TYPE</b> + {type === 'string' ? 'GET' : type === 'list' ? 'LRANGE' : type === 'zset' ? 'ZRANGE' : 'XRANGE'}</span><span className="mono">gateway → RESP</span></div></div>
+}
+
+function Rows({ response, label, note }: { response?: RedisResponse; label: string; note?: string }) { const values = response?.type === 'array' ? response.value as RedisResponse[] : []; return <div className="rows-wrap"><div className="table-head"><span>{label}</span><span>VALUE</span></div>{values.map((value, index) => <div className="data-row" key={index}><span className="row-index">{index}</span><code>{String(value.value)}</code></div>)}{note && <p className="muted table-note">{note}</p>}</div> }
+function StreamRows({ response }: { response?: RedisResponse }) { const values = response?.type === 'array' ? response.value as RedisResponse[] : []; return <div className="rows-wrap"><div className="table-head"><span>ID</span><span>FIELDS</span></div>{values.map((entry, index) => { const parts = entry.type === 'array' ? entry.value as RedisResponse[] : []; const fields = parts[1]?.type === 'array' ? parts[1].value as RedisResponse[] : []; return <div className="data-row stream-row" key={index}><code>{String(parts[0]?.value)}</code><span>{fields.map(field => String(field.value)).join(' = ')}</span></div> })}</div> }
